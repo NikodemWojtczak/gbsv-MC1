@@ -15,4 +15,4 @@ def convert_notebook_to_html(notebook_path, output_path):
         f.write(body)
 
 
-convert_notebook_to_html("MC1.ipynb", "Day_5.html")
+convert_notebook_to_html("repo/MC1.ipynb", "repo/Day_6.html")
