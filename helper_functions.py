@@ -8,7 +8,19 @@ from io import BytesIO
 from PIL import Image
 import seaborn as sns
 from matplotlib.gridspec import GridSpec
-
+import numpy as np
+from skimage import color
+from skimage.transform import resize
+from urllib.request import urlopen
+from io import BytesIO
+from PIL import Image
+import matplotlib.pyplot as plt
+from skimage.metrics import structural_similarity as ssim
+from skimage import feature
+from scipy import fftpack
+import pandas as pd
+from matplotlib.colors import LogNorm
+import seaborn as sns
 #
 #  Reusing the custom convolution function from Day 8
 def custom_convolution_2d(image, kernel, padding='same', stride=1):
@@ -156,3 +168,80 @@ def display_results(original, processed_images, titles, roi=None):
     
     plt.tight_layout()
     plt.show()
+
+
+def calculate_edge_preservation(img1, img2):
+    """
+    Calculate edge preservation ratio between original and filtered images.
+    Adapted from: "Image Quality Assessment: From Error Visibility to Structural Similarity"
+    """
+    # Detect edges in both images using Canny edge detector
+    edges1 = feature.canny(img1, sigma=1.0)
+    edges2 = feature.canny(img2, sigma=1.0)
+    
+    # Calculate the ratio of matching edge pixels
+    matching_edges = np.sum(np.logical_and(edges1, edges2))
+    total_edges_original = np.sum(edges1)
+    
+    # Avoid division by zero
+    if total_edges_original == 0:
+        return 0
+    
+    # Return the edge preservation ratio (higher is better)
+    return matching_edges / total_edges_original
+
+def calculate_detail_variance_ratio(img1, img2):
+    """
+    Calculate the ratio of local variance in filtered image compared to original.
+    A measure of detail preservation (values close to 1 are best).
+    """
+    # Calculate local variance using a 5x5 window
+    from scipy.ndimage import uniform_filter
+    
+    # Mean filter
+    mean1 = uniform_filter(img1, size=5)
+    mean2 = uniform_filter(img2, size=5)
+    
+    # Squared mean filter
+    mean1_sq = uniform_filter(img1**2, size=5)
+    mean2_sq = uniform_filter(img2**2, size=5)
+    
+    # Variance = E[X^2] - E[X]^2
+    var1 = mean1_sq - mean1**2
+    var2 = mean2_sq - mean2**2
+    
+    # Avoid division by zero
+    var1[var1 < 1e-10] = 1e-10
+    
+    # Calculate ratio (avoid extreme values)
+    ratio = var2 / var1
+    ratio = np.clip(ratio, 0.01, 100)
+    
+    # Return mean ratio (closer to 1 is better)
+    return np.mean(ratio)
+
+def calculate_contrast_enhancement(img1, img2):
+    """
+    Measure the improvement in local contrast after filtering.
+    For historical photos, enhanced contrast is often desired.
+    Returns a positive value if contrast is enhanced (higher is better).
+    """
+    # Calculate local contrast using standard deviation in small patches
+    from scipy.ndimage import uniform_filter
+    
+    def local_contrast(img, window_size=5):
+        # Mean of squared values
+        mean_sq = uniform_filter(img**2, size=window_size)
+        # Square of means
+        sq_mean = uniform_filter(img, size=window_size)**2
+        # Local standard deviation
+        return np.sqrt(np.maximum(mean_sq - sq_mean, 0))
+    
+    # Get local contrast for both images
+    contrast1 = local_contrast(img1)
+    contrast2 = local_contrast(img2)
+    
+    # Calculate average contrast ratio (>1 means enhancement)
+    contrast_ratio = np.mean(contrast2) / np.mean(contrast1)
+    
+    return contrast_ratio
